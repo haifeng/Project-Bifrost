@@ -446,22 +446,22 @@ trait ValidGenerators extends BifrostGenerators {
     val sellInputSum = sellInputBoxes.map(t => positiveMediumIntGen.sample.get).sum
 
     val token1 = TradeData(token1Code, Gen.choose(1, sellInputSum).sample.get, Option(ByteString.copyFrom(tokenHub.pubKeyBytes)))
-    val token2 = TradeData("Poly", buyInputSum, None)
+    val token2 = TradeData("Poly", Gen.choose(1, buyInputSum).sample.get, None)
 
-    val buyTempOrder = BuySellOrder(token1, token2, buyInputBoxes, Seq(), true,
-      ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs.head._2.pubKeyBytes))
+    val buyTempOrder = BuySellOrder(token1, token2, buyInputBoxes, Seq(), buyInputSum.toLong,
+      true, ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs.head._2.pubKeyBytes))
     val buyHash = ByteString.copyFrom(FastCryptographicHash(buyTempOrder.toByteArray))
     val buyMessageToSign = TokenExchangeTransaction.messageToSign(buyTempOrder)
     val buySigs = buyPrivKeyList.toList.map(key => ByteString.copyFrom(PrivateKey25519Companion.sign(key, buyMessageToSign).signature))
 
-    val sellTempOrder = BuySellOrder(token1, token2, sellInputBoxes, Seq(), false,
-      ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs2.head._2.pubKeyBytes))
+    val sellTempOrder = BuySellOrder(token1, token2, sellInputBoxes, Seq(), sellInputSum.toLong,
+      false, ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs2.head._2.pubKeyBytes))
     val sellHash = ByteString.copyFrom(FastCryptographicHash(sellTempOrder.toByteArray))
     val sellMessageToSign = TokenExchangeTransaction.messageToSign(sellTempOrder)
     val sellSigs = sellPrivKeyList.toList.map(key => ByteString.copyFrom(PrivateKey25519Companion.sign(key, sellMessageToSign).signature))
 
     (buyTempOrder.copy(id = buyHash, signatures = buySigs),
-      sellTempOrder.copy(id = sellHash, signatures = sellSigs), buyInputSum - Gen.choose(1, buyInputSum).sample.get)
+      sellTempOrder.copy(id = sellHash, signatures = sellSigs), Gen.choose(1, buyInputSum).sample.get)
   }
 
   lazy val validTokenExchangeTxGen: Gen[TokenExchangeTransaction] = for {

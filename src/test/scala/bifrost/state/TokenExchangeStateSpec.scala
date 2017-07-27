@@ -17,11 +17,11 @@ import scala.util.Failure
 
 class TokenExchangeStateSpec extends BifrostStateSpec {
   private def getPreExistingBoxes(tex: TokenExchangeTransaction): Set[BifrostBox] = {
-    val polyAmounts = splitAmongN(tex.buyOrder.token2.quantity, tex.buyOrder.inputBoxes.size, 0, tex.buyOrder.token2.quantity).get
-    val preExistingPolyBoxes: Set[BifrostBox] = tex.buyOrder.inputBoxes.zip(polyAmounts).map{ case (box, amount) =>
+    val polyAmounts = splitAmongN(tex.buyOrder.totalInputValue, tex.buyOrder.inputBoxes.size, 0, tex.buyOrder.totalInputValue).get
+    val preExistingPolyBoxes: Set[BifrostBox] = tex.buyOrder.inputBoxes.zip(polyAmounts).map { case (box, amount) =>
       PolyBox(PublicKey25519Proposition(box.publicKey.toByteArray), box.nonce, amount)}.toSet
 
-    val assetAmounts = splitAmongN(tex.sellOrder.token1.quantity, tex.sellOrder.inputBoxes.size, 0, tex.sellOrder.token1.quantity).get
+    val assetAmounts = splitAmongN(tex.sellOrder.totalInputValue, tex.sellOrder.inputBoxes.size, 0, tex.sellOrder.totalInputValue).get
     val preExistingAssetBoxes: Set[BifrostBox] = tex.sellOrder.inputBoxes.zip(assetAmounts).map { case (box, amount) =>
       AssetBox(PublicKey25519Proposition(box.publicKey.toByteArray), box.nonce, amount,
         tex.sellOrder.token1.tokenCode,
@@ -48,6 +48,7 @@ class TokenExchangeStateSpec extends BifrostStateSpec {
           allPreExistingBoxes,
           Instant.now.toEpochMilli
         )
+        println(tex.newBoxes.toList)
         // Manipulate genesisState
         val preparedState = BifrostStateSpec.genesisState.applyChanges(necessaryBoxesSC, Ints.toByteArray(1)).get
         // Validate transaction
@@ -57,14 +58,15 @@ class TokenExchangeStateSpec extends BifrostStateSpec {
         // Apply the transaction
         val newState = preparedState.applyChanges(preparedState.changes(block).get, Ints.toByteArray(2)).get
         // Check the result
-        val newBoxes = tex.newBoxes
-        require(newState.closedBox(newBoxes.last.id).get.asInstanceOf[PolyBox].value + tex.fee == tex.buyOrder.token2.quantity)
-        require(newState.closedBox(newBoxes.last.id).get.proposition.asInstanceOf[PublicKey25519Proposition]
-          equals PublicKey25519Proposition(tex.sellOrder.publicKey.toByteArray))
+        val newBoxes = tex.newBoxes.map(box => newState.closedBox(box.id).get)
+        val polyBoxes = newBoxes.collect{case box: PolyBox => box}
+        val assetBoxes = newBoxes.collect{case box: AssetBox => box}
 
-        require(newState.closedBox(newBoxes.head.id).get.asInstanceOf[AssetBox].value == tex.sellOrder.token1.quantity)
-        require(newState.closedBox(newBoxes.head.id).get.proposition.asInstanceOf[PublicKey25519Proposition]
-          equals PublicKey25519Proposition(tex.buyOrder.publicKey.toByteArray))
+        require(polyBoxes.collect{case box if box.proposition equals PublicKey25519Proposition(tex.sellOrder.publicKey.toByteArray) => box.value}.sum + tex.fee == tex.buyOrder.token2.quantity)
+        require(polyBoxes.map(_.value).sum + tex.fee == tex.buyOrder.totalInputValue)
+
+        require(assetBoxes.collect{case box if box.proposition equals PublicKey25519Proposition(tex.buyOrder.publicKey.toByteArray) => box.value}.sum == tex.sellOrder.token1.quantity)
+        require(assetBoxes.map(_.value).sum == tex.sellOrder.totalInputValue)
 
         BifrostStateSpec.genesisState = newState.rollbackTo(BifrostStateSpec.genesisBlockId).get
     }

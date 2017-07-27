@@ -2,7 +2,7 @@ package bifrost.exchange
 
 import scala.collection.mutable
 
-class OrderBook(symbol: String) {
+case class OrderBook(symbol: String) {
 
   case class Order(timestamp: Long,
                    tradeId: String,

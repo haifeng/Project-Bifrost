@@ -670,6 +670,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     statefulValid.flatMap(_ => semanticValidity(ct))
   }
 
+  //noinspection ScalaStyle
   def validateTokenExchangeTransaction(tex: TokenExchangeTransaction): Try[Unit] = {
     val tokenHub = PublicKey25519Proposition(tex.buyOrder.token1.tokenHub.get.toByteArray)
     val tokenCode = tex.buyOrder.token1.tokenCode
@@ -692,6 +693,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
           )
         )
       }
+      val checkSellOrderSupply = Try(require(assetBoxesSumTry.get == tex.sellOrder.totalInputValue, "sellOrderInputValue does not match"))
       val enoughAssetTry = determineEnoughAssets(assetBoxesSumTry, tex)
       val polyBoxesSumTry: Try[Long] = {
         tex.token2Tx.unlockers.foldLeft[Try[Long]](Success(0L))((partialRes, unlocker) =>
@@ -709,8 +711,9 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
           )
         )
       }
+      val checkBuyOrderSupply = Try(require(polyBoxesSumTry.get == tex.buyOrder.totalInputValue, "buyOrderInputValue does not match"))
       val enoughPolyTry = determineEnoughPolys(polyBoxesSumTry, tex)
-      val tries = Seq(enoughAssetTry, enoughPolyTry)
+      val tries = Seq(enoughAssetTry, checkBuyOrderSupply, enoughPolyTry, checkSellOrderSupply)
       Try(tries.foreach(_.get))
     }
     statefulValid.flatMap(_ => semanticValidity(tex))

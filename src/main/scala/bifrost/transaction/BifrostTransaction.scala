@@ -30,6 +30,7 @@ import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.Curve25519
 import serializer.BuySellOrder
 
+import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success, Try}
 import scalapb.descriptors.ScalaType.ByteString
 
@@ -862,8 +863,7 @@ object AssetTransfer extends TransferUtil {
 case class TokenExchangeTransaction(buyOrder: BuySellOrder,
                                     sellOrder: BuySellOrder,
                                     override val fee: Long,
-                                    override val timestamp: Long
-                                   )
+                                    override val timestamp: Long)
   extends BifrostTransaction {
 
   lazy val tokenCodes = IndexedSeq(buyOrder.token1.tokenCode, buyOrder.token2.tokenCode)
@@ -875,18 +875,28 @@ case class TokenExchangeTransaction(buyOrder: BuySellOrder,
   lazy val token1Tx = {
     val fromSeller = sellOrder.inputBoxes.map(noncedBox =>
       (PublicKey25519Proposition(noncedBox.publicKey.toByteArray), noncedBox.nonce)).toIndexedSeq
-    val toBuyer = IndexedSeq((PublicKey25519Proposition(buyOrder.publicKey.toByteArray), sellOrder.token1.quantity)).toIndexedSeq
+    var toBuyerAndSeller = ListBuffer(
+      (PublicKey25519Proposition(buyOrder.publicKey.toByteArray), sellOrder.token1.quantity)
+    )
+    if (sellOrder.totalInputValue > sellOrder.token1.quantity) {
+      toBuyerAndSeller += Tuple2(PublicKey25519Proposition(sellOrder.publicKey.toByteArray), sellOrder.totalInputValue - sellOrder.token1.quantity)
+    }
     val hub = PublicKey25519Proposition(sellOrder.token1.tokenHub.get.toByteArray)
     val assetCode = sellOrder.token1.tokenCode
 
-    AssetTransfer(fromSeller, toBuyer, sellOrder.signatures.map(s => Signature25519(s.toByteArray)).toIndexedSeq, hub, assetCode, 0L, sellOrder.timestamp)
+    AssetTransfer(fromSeller, toBuyerAndSeller.toIndexedSeq, sellOrder.signatures.map(s => Signature25519(s.toByteArray)).toIndexedSeq, hub, assetCode, 0L, sellOrder.timestamp)
   }
 
   lazy val token2Tx = {
     val fromBuyer = buyOrder.inputBoxes.map(noncedBox =>(PublicKey25519Proposition(noncedBox.publicKey.toByteArray), noncedBox.nonce)).toIndexedSeq
-    val toSeller = IndexedSeq((PublicKey25519Proposition(sellOrder.publicKey.toByteArray), buyOrder.token2.quantity - fee)).toIndexedSeq
+    var toSellerAndBuyer = ListBuffer(
+      (PublicKey25519Proposition(sellOrder.publicKey.toByteArray), buyOrder.token2.quantity - fee)
+    )
+    if (buyOrder.totalInputValue > buyOrder.token2.quantity) {
+      toSellerAndBuyer += Tuple2(PublicKey25519Proposition(buyOrder.publicKey.toByteArray), buyOrder.totalInputValue - buyOrder.token2.quantity)
+    }
     // TODO: Assume token2 is always Poly for now
-    PolyTransfer(fromBuyer, toSeller, buyOrder.signatures.map(s => Signature25519(s.toByteArray)).toIndexedSeq, fee, buyOrder.timestamp)
+    PolyTransfer(fromBuyer, toSellerAndBuyer.toIndexedSeq, buyOrder.signatures.map(s => Signature25519(s.toByteArray)).toIndexedSeq, fee, buyOrder.timestamp)
   }
 
   override lazy val newBoxes: Traversable[BifrostBox] = token1Tx.newBoxes ++ token2Tx.newBoxes
@@ -913,6 +923,8 @@ object TokenExchangeTransaction {
   }
 
   def validate(tx: TokenExchangeTransaction): Try[Unit] = Try {
+    require((tx.buyOrder.token2.quantity <= tx.buyOrder.totalInputValue) && (tx.sellOrder.token1.quantity <= tx.sellOrder.totalInputValue))
+
     require(tx.buyOrder.token1.tokenCode == tx.sellOrder.token1.tokenCode)
     require(tx.buyOrder.token2.tokenCode == tx.sellOrder.token2.tokenCode)
     require(tx.buyOrder.token1.quantity == tx.sellOrder.token1.quantity)
