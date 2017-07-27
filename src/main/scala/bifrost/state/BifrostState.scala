@@ -671,7 +671,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
   }
 
   def validateTokenExchangeTransaction(tex: TokenExchangeTransaction): Try[Unit] = {
-    val tokenHub = tex.buyOrder.token1.tokenHub.get.toByteArray
+    val tokenHub = PublicKey25519Proposition(tex.buyOrder.token1.tokenHub.get.toByteArray)
     val tokenCode = tex.buyOrder.token1.tokenCode
     val statefulValid: Try[Unit] = {
       val assetBoxesSumTry: Try[Long] = {

@@ -902,12 +902,17 @@ case class TokenExchangeTransaction(buyOrder: BuySellOrder,
 
 object TokenExchangeTransaction {
   def messageToSign(order: BuySellOrder): Array[Byte] = {
-    "TokenExchangeTransaction".getBytes ++ order.toByteArray
+    "TokenExchangeTransaction".getBytes ++ Bytes.concat(
+      order.token1.toByteArray,
+      order.token2.toByteArray,
+      order.inputBoxes.foldLeft(Array[Byte]())((total, seg) => total ++ seg.toByteArray),
+      order.isBuyOrder.toString.getBytes(),
+      Longs.toByteArray(order.timestamp),
+      order.publicKey.toByteArray
+    )
   }
 
   def validate(tx: TokenExchangeTransaction): Try[Unit] = Try {
-    require(tx.fee <= tx.buyOrder.token2.quantity)
-
     require(tx.buyOrder.token1.tokenCode == tx.sellOrder.token1.tokenCode)
     require(tx.buyOrder.token2.tokenCode == tx.sellOrder.token2.tokenCode)
     require(tx.buyOrder.token1.quantity == tx.sellOrder.token1.quantity)

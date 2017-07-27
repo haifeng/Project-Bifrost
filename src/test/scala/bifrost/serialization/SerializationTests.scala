@@ -166,6 +166,14 @@ class SerializationTests extends PropSpec
     }
   }
 
+  property("TokenExchangeTransaction Serialization") {
+    forAll(validTokenExchangeTxGen) {
+      tex: TokenExchangeTransaction =>
+        val parsed = BifrostTransactionCompanion.parseBytes(BifrostTransactionCompanion.toBytes(tex)).get
+        BifrostTransactionCompanion.toBytes(parsed) sameElements BifrostTransactionCompanion.toBytes(tex) shouldBe true
+    }
+  }
+
   property("ProfileTransaction Serialization") {
     forAll(profileTxGen) {
       p: ProfileTransaction =>
