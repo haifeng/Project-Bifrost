@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import akka.actor.{ActorRef, Props}
 import bifrost.api.http._
 import bifrost.blocks.BifrostBlock
+import bifrost.exchange.ExchangeManager
 import bifrost.forging.{Forger, ForgingSettings}
 import bifrost.history.{BifrostSyncInfo, BifrostSyncInfoMessageSpec}
 import bifrost.network.{BifrostNodeViewSynchronizer, PeerMessageSpec}
@@ -67,12 +68,15 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
     Props(classOf[BifrostLocalInterface], nodeViewHolderRef, forger, settings)
   )
 
+  val exchange: ActorRef = actorSystem.actorOf(Props(new ExchangeManager(nodeViewHolderRef)))
+
   override val nodeViewSynchronizer: ActorRef = actorSystem.actorOf(
-    Props(classOf[BifrostNodeViewSynchronizer], networkController, nodeViewHolderRef, localInterface, BifrostSyncInfoMessageSpec)
+    Props(classOf[BifrostNodeViewSynchronizer], networkController, nodeViewHolderRef, localInterface, BifrostSyncInfoMessageSpec, exchange)
   )
 
   //touching lazy vals
   forger
+  exchange
   localInterface
   nodeViewSynchronizer
 

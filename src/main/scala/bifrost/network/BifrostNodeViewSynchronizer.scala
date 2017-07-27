@@ -2,6 +2,7 @@ package bifrost.network
 
 import akka.actor.{Actor, ActorRef}
 import bifrost.BifrostNodeViewHolder
+import bifrost.exchange.ExchangeManager
 import bifrost.history.{BifrostSyncInfo, BifrostSyncInfoMessageSpec}
 import bifrost.scorexMod.GenericNodeViewHolder._
 import bifrost.scorexMod.GenericNodeViewSynchronizer.GetLocalSyncInfo
@@ -28,7 +29,8 @@ import scala.concurrent.duration._
 class BifrostNodeViewSynchronizer(networkControllerRef: ActorRef,
                                   viewHolderRef: ActorRef,
                                   localInterfaceRef: ActorRef,
-                                  syncInfoSpec: BifrostSyncInfoMessageSpec.type)
+                                  syncInfoSpec: BifrostSyncInfoMessageSpec.type,
+                                  exchangeRef: ActorRef)
   extends GenericNodeViewSynchronizer[ProofOfKnowledgeProposition[PrivateKey25519],
     BifrostTransaction,
     BifrostSyncInfo,
@@ -62,7 +64,7 @@ class BifrostNodeViewSynchronizer(networkControllerRef: ActorRef,
             Message(PeerMessageSpec, Right(data), None), BroadcastExceptOf(Seq(remote))
           )
         case PeerMessage.Type.BuySellOrder =>
-          viewHolderRef ! BifrostNodeViewHolder.PeerMessageReceived(data)
+          exchangeRef ! ExchangeManager.PeerMessageReceived(data)
           networkControllerRef ! NetworkController.SendToNetwork(
             Message(PeerMessageSpec, Right(data), None), BroadcastExceptOf(Seq(remote))
           )
