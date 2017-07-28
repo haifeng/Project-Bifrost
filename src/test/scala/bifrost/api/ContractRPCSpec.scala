@@ -17,6 +17,7 @@ import bifrost.BifrostNodeViewHolder.{GetMessageManager, MessageManager}
 import bifrost.{BifrostLocalInterface, BifrostNodeViewHolder}
 import bifrost.api.http.ContractApiRoute
 import bifrost.blocks.BifrostBlock
+import bifrost.exchange.ExchangeManager
 import bifrost.forging.{Forger, ForgingSettings}
 import bifrost.history.{BifrostHistory, BifrostSyncInfoMessageSpec}
 import bifrost.mempool.BifrostMemPool
@@ -92,8 +93,10 @@ class ContractRPCSpec extends WordSpec
     Props(classOf[BifrostLocalInterface], nodeViewHolderRef, forger, settings)
   )
 
+  val exchange: ActorRef = actorSystem.actorOf(Props(new ExchangeManager(nodeViewHolderRef)))
+
   val nodeViewSynchronizer: ActorRef = actorSystem.actorOf(
-    Props(classOf[BifrostNodeViewSynchronizer], networkController, nodeViewHolderRef, localInterface, BifrostSyncInfoMessageSpec)
+    Props(classOf[BifrostNodeViewSynchronizer], networkController, nodeViewHolderRef, localInterface, BifrostSyncInfoMessageSpec, exchange)
   )
 
   val route = ContractApiRoute(settings, nodeViewHolderRef, networkController).route
