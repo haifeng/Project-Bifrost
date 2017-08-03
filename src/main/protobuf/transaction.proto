@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+import "blocks.proto";
+
+message PublicKey25519Proposition {
+
+}
+
+message Signature25519 {
+    bytes sig = 1;
+}
+
+message PolyRedemptionData {
+    repeated <bytes,int64> polysToRedeem = 1 [(scalapb.field).collection_type="collection.immutable.IndexedSeq",
+        (scalapb.field).type="PublicKey25519Proposition", (scalapb.field).type="Nonce")];
+    repeated bytes signatures = 2 [(scalapb.field).collection_type="collection.immutable.IndexedSeq"];
+    int64 fee = 3;
+    int64 timestamp = 4;
+}

@@ -8,10 +8,9 @@ import bifrost.contract._
 import bifrost.transaction.BifrostTransaction.Nonce
 import bifrost.transaction._
 import bifrost.transaction.box.proposition.MofNProposition
-import bifrost.transaction.box._
+import bifrost.transaction.box.{ContractBox, ProfileBox, ReputationBox}
 import bifrost.transaction.proof.MultiSignature25519
 import com.google.common.primitives.{Bytes, Longs}
-import com.google.protobuf.ByteString
 import io.circe.Json
 import org.scalacheck.Gen
 import scorex.core.crypto.hash.FastCryptographicHash
@@ -24,10 +23,7 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.{Proof, Signature25519}
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.crypto.signatures.Curve25519
-import serializer.{BuySellOrder, NoncedBox}
-import serializer.BuySellOrder.TradeData
 
-import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Random, Success}
 
 /**
@@ -402,6 +398,11 @@ trait ValidGenerators extends BifrostGenerators {
     val totalAssetBoxes: Map[(String, PublicKey25519Proposition), IndexedSeq[(PublicKey25519Proposition, Nonce)]] =
       assetHubPairs.map{_ -> IndexedSeq(Gen.oneOf(fromKeyPairs).sample.get._1 -> Gen.choose(Long.MinValue, Long.MaxValue).sample.get)}
     
+    lazy val validPolyRedemptionGen: Gen[PolyRedemption] = for {
+      //TODO finish validPolyRedemptionGen
+    } yield {
+    
+    }
     
     val assetsToReturn: Map[(String, PublicKey25519Proposition), IndexedSeq[(PublicKey25519Proposition, Long)]] =
       assetHubPairs.map(_ -> IndexedSeq(Gen.oneOf(fromKeyPairs).sample.get._1 -> positiveMediumIntGen.sample.get.toLong))
@@ -422,52 +423,5 @@ trait ValidGenerators extends BifrostGenerators {
     println(s"Dummy transaction's message to Sign: ${Base58.encode(dummyTx.messageToSign)}")
     
     dummyTx.copy(conversionSignatures = realSignatures)
-  }
-
-  lazy val nonceGen: Gen[Long] = Gen.choose(Long.MinValue, Long.MaxValue)
-
-  lazy val validOrderPairGen: Gen[(BuySellOrder, BuySellOrder, Long)] = for {
-    keyPairs <- keyPairSetGen
-    keyPairs2 <- keyPairSetGen
-    tokenHub <- propositionGen
-    token1Code <- stringGen
-    timestamp <- positiveLongGen
-  } yield {
-    var buyPrivKeyList = ListBuffer[PrivateKey25519](); var sellPrivKeyList = ListBuffer[PrivateKey25519]()
-    val buyInputBoxes = keyPairs.toSeq.map{kp =>
-      buyPrivKeyList += kp._1
-      NoncedBox("Poly", ByteString.copyFrom(kp._2.pubKeyBytes), nonceGen.sample.get)
-    }
-    val sellInputBoxes = keyPairs2.toSeq.map{kp =>
-      sellPrivKeyList += kp._1
-      NoncedBox("Asset", ByteString.copyFrom(kp._2.pubKeyBytes), nonceGen.sample.get)
-    }
-    val buyInputSum = buyInputBoxes.map(t => positiveMediumIntGen.sample.get).sum
-    val sellInputSum = sellInputBoxes.map(t => positiveMediumIntGen.sample.get).sum
-
-    val token1 = TradeData(token1Code, Gen.choose(1, sellInputSum).sample.get, Option(ByteString.copyFrom(tokenHub.pubKeyBytes)))
-    val token2 = TradeData("Poly", buyInputSum, None)
-
-    val buyTempOrder = BuySellOrder(token1, token2, buyInputBoxes, Seq(), true,
-      ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs.head._2.pubKeyBytes))
-    val buyHash = ByteString.copyFrom(FastCryptographicHash(buyTempOrder.toByteArray))
-    val buyMessageToSign = TokenExchangeTransaction.messageToSign(buyTempOrder)
-    val buySigs = buyPrivKeyList.toList.map(key => ByteString.copyFrom(PrivateKey25519Companion.sign(key, buyMessageToSign).signature))
-
-    val sellTempOrder = BuySellOrder(token1, token2, sellInputBoxes, Seq(), false,
-      ByteString.copyFrom(Array[Byte]()), timestamp, ByteString.copyFrom(keyPairs2.head._2.pubKeyBytes))
-    val sellHash = ByteString.copyFrom(FastCryptographicHash(sellTempOrder.toByteArray))
-    val sellMessageToSign = TokenExchangeTransaction.messageToSign(sellTempOrder)
-    val sellSigs = sellPrivKeyList.toList.map(key => ByteString.copyFrom(PrivateKey25519Companion.sign(key, sellMessageToSign).signature))
-
-    (buyTempOrder.copy(id = buyHash, signatures = buySigs),
-      sellTempOrder.copy(id = sellHash, signatures = sellSigs), buyInputSum - Gen.choose(1, buyInputSum).sample.get)
-  }
-
-  lazy val validTokenExchangeTxGen: Gen[TokenExchangeTransaction] = for {
-    orderPair <- validOrderPairGen
-    timestamp <- positiveLongGen
-  } yield {
-    TokenExchangeTransaction(orderPair._1, orderPair._2, orderPair._3, timestamp)
   }
 }

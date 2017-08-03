@@ -7,6 +7,7 @@ import com.google.common.primitives.Longs
 import bifrost.blocks.BifrostBlock
 import bifrost.contract.Contract
 import bifrost.scorexMod.{GenericBoxMinimalState, GenericStateChanges}
+import bifrost.transaction.BifrostTransaction.Nonce
 import bifrost.transaction._
 import bifrost.transaction.box._
 import bifrost.transaction.box.proposition.MofNProposition
@@ -16,6 +17,7 @@ import io.circe.syntax._
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.crypto.hash.FastCryptographicHash
 import scorex.core.settings.Settings
+import scorex.core.transaction.account.PublicKeyNoncedBox
 import scorex.core.transaction.box.proposition.{ProofOfKnowledgeProposition, Proposition, PublicKey25519Proposition}
 import scorex.core.transaction.state.MinimalState.VersionTag
 import scorex.core.transaction.state.{PrivateKey25519, StateChanges}
@@ -41,7 +43,7 @@ case class BifrostStateChanges(override val boxIdsToRemove: Set[Array[Byte]],
 case class BifrostState(storage: LSMStore, override val version: VersionTag, timestamp: Long)
   extends GenericBoxMinimalState[Any, ProofOfKnowledgeProposition[PrivateKey25519],
     BifrostBox, BifrostTransaction, BifrostBlock, BifrostState] with ScorexLogging {
-
+  
   override type NVCT = BifrostState
   type P = BifrostState.P
   type T = BifrostState.T
@@ -81,6 +83,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
 
   override def changes(mod: BPMOD): Try[GSC] = BifrostState.changes(mod)
 
+  //noinspection ScalaStyle
   override def applyChanges(changes: GSC, newVersion: VersionTag): Try[NVCT] = Try {
 
     val boxesToAdd = changes.toAppend.map(b => ByteArrayWrapper(b.id) -> ByteArrayWrapper(b.bytes))
@@ -92,6 +95,37 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
       s"Removing boxes with ids ${boxIdsToRemove.map(b => Base58.encode(b.data))}, " +
       s"adding boxes ${boxesToAdd.map(b => Base58.encode(b._1.data))}")
 
+    /* keep account of all polys in the system */
+    val totalPolys: Long = {
+      val removedBoxes = boxIdsToRemove.map { b =>
+        BifrostBoxSerializer.parseBytes(storage.get(b).get.data).get
+      }
+      
+      changes.toAppend.foldLeft(0L){case (a, (p: PolyBox)) =>
+        a + p.value
+      } +
+      removedBoxes.foldLeft[Long](0L){ (a,b) => {b match {
+        case p: PolyBox => a + p.value
+      }
+      }}
+    }
+    
+    /* if an asset box is signed with the basket key, add/remove it to/from the basket held in storage */
+    val basketKey: PublicKey25519Proposition = PublicKey25519Proposition(storage.get(ByteArrayWrapper("basketKey".getBytes)).get.data)
+    val basketIds: Set[Array[Byte]] = Set(storage.get(ByteArrayWrapper("basket".getBytes)).get.data)
+    val basketBoxes: Set[BifrostBox] = basketIds.map{ b =>
+      BifrostBoxSerializer.parseBytes(storage.get(ByteArrayWrapper(b)).get.data).get
+    }
+    
+    val basketChange = changes.toAppend.map { b =>
+      if(b.publicKey == basketKey)
+        ByteArrayWrapper(b.id)
+    } -
+    boxIdsToRemove.map { b =>
+      if(basketIds.contains(b.data))
+        b
+    }
+    
     val timestamp: Long = changes.asInstanceOf[BifrostStateChanges].timestamp
 
     if (storage.lastVersionID.isDefined) boxIdsToRemove.foreach(i => require(closedBox(i.data).isDefined))
@@ -99,15 +133,19 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     storage.update(
       ByteArrayWrapper(newVersion),
       boxIdsToRemove,
-      boxesToAdd + (ByteArrayWrapper(FastCryptographicHash("timestamp".getBytes)) -> ByteArrayWrapper(Longs.toByteArray(timestamp)))
+      boxesToAdd + (ByteArrayWrapper(FastCryptographicHash("timestamp".getBytes)) -> ByteArrayWrapper(Longs.toByteArray(timestamp))) +
+        (ByteArrayWrapper("masterKey".getBytes) -> ByteArrayWrapper("6sYyiTguyQ455w2dGEaNbrwkAWAEYV1Zk6FtZMknWDKQ".getBytes)) +
+        (ByteArrayWrapper("basketKey".getBytes) -> ByteArrayWrapper("7BDhJv6Wh2MekgJLvQ98ot9xiw5x3N4b3KipURdrW8Ge".getBytes)) +
+        //(ByteArrayWrapper("basket".getBytes) -> ByteArrayWrapper()) +
+        (ByteArrayWrapper("'polyTotal".getBytes) -> ByteArrayWrapper(Longs.toByteArray(totalPolys)))
     )
 
     val newSt = BifrostState(storage, newVersion, timestamp)
     boxIdsToRemove.foreach(box => require(newSt.closedBox(box.data).isEmpty, s"Box $box is still in state"))
     newSt
-
   }
 
+  //noinspection ScalaStyle
   override def validate(transaction: TX): Try[Unit] = {
     transaction match {
       case poT: PolyTransfer => validatePolyTransfer(poT)
@@ -119,7 +157,6 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
       case cComp: ContractCompletion => validateContractCompletion(cComp)
       case ar: AssetRedemption => validateAssetRedemption(ar)
       case ct: ConversionTransaction => validateConversionTransaction(ct)
-      case tex: TokenExchangeTransaction => validateTokenExchangeTransaction(tex)
       case _ => throw new Exception("State validity not implemented for " + transaction.getClass.toGenericString)
     }
   }
@@ -150,23 +187,21 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
           )
         )
       }
-      determineEnoughPolys(boxesSumTry: Try[Long], poT)
+
+      boxesSumTry flatMap { openSum =>
+        if (poT.newBoxes.map {
+          case p: PolyBox => p.value
+          case _ => 0L
+        }.sum == openSum - poT.fee) {
+          Success[Unit](Unit)
+        } else {
+          Failure(new Exception("Negative fee"))
+        }
+      }
+
     }
 
     statefulValid.flatMap(_ => semanticValidity(poT))
-  }
-
-  private def determineEnoughPolys(boxesSumTry: Try[Long], tx: BifrostTransaction): Try[Unit] = {
-    boxesSumTry flatMap { openSum =>
-      if (tx.newBoxes.map {
-        case p: PolyBox => p.value
-        case _ => 0L
-      }.sum == openSum - tx.fee) {
-        Success[Unit](Unit)
-      } else {
-        Failure(new Exception("Negative fee"))
-      }
-    }
   }
 
   def validateArbitTransfer(arT: ArbitTransfer): Try[Unit] = {
@@ -228,23 +263,21 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
           )
         )
       }
-      determineEnoughAssets(boxesSumTry, asT)
+
+      boxesSumTry flatMap { openSum =>
+        if (asT.newBoxes.map {
+          case a: AssetBox => a.value
+          case _ => 0L
+        }.sum <= openSum) {
+          Success[Unit](Unit)
+        } else {
+          Failure(new Exception("Not enough assets"))
+        }
+      }
+
     }
 
     statefulValid.flatMap(_ => semanticValidity(asT))
-  }
-
-  private def determineEnoughAssets(boxesSumTry: Try[Long], tx: BifrostTransaction): Try[Unit] = {
-    boxesSumTry flatMap { openSum =>
-      if (tx.newBoxes.map {
-        case a: AssetBox => a.value
-        case _ => 0L
-      }.sum <= openSum) {
-        Success[Unit](Unit)
-      } else {
-        Failure(new Exception("Not enough assets"))
-      }
-    }
   }
 
   /**
@@ -669,37 +702,17 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     }
     statefulValid.flatMap(_ => semanticValidity(ct))
   }
-
-  def validateTokenExchangeTransaction(tex: TokenExchangeTransaction): Try[Unit] = {
-    val tokenHub = PublicKey25519Proposition(tex.buyOrder.token1.tokenHub.get.toByteArray)
-    val tokenCode = tex.buyOrder.token1.tokenCode
+  
+  def validPolyRedemption(pr: PolyRedemption): Try[Unit] = {
     val statefulValid: Try[Unit] = {
-      val assetBoxesSumTry: Try[Long] = {
-        tex.token1Tx.unlockers.foldLeft[Try[Long]](Success(0L))((partialRes, unlocker) =>
-
+      
+      /* Check if all the proposed boxes exist */
+      val polySumTry: Try[Long] = {
+        pr.unlockers.foldLeft[Try[Long]](Success(0L))((partialRes, unlocker) =>
           partialRes.flatMap(partialSum =>
-            /* Checks if unlocker is valid and if so adds to current running total */
-            closedBox(unlocker.closedBoxId) match {
-              case Some(box: AssetBox) =>
-                val tokenGood = (box.hub equals tokenHub) && (box.assetCode equals tokenCode)
-                if (unlocker.boxKey.isValid(box.proposition, TokenExchangeTransaction.messageToSign(tex.sellOrder)) && tokenGood) {
-                  Success(partialSum + box.value)
-                } else {
-                  Failure(new Exception("Incorrect unlocker Or Incorrect BoxId supplied"))
-                }
-              case None => Failure(new Exception(s"Box for unlocker $unlocker is not in the state"))
-            }
-          )
-        )
-      }
-      val enoughAssetTry = determineEnoughAssets(assetBoxesSumTry, tex)
-      val polyBoxesSumTry: Try[Long] = {
-        tex.token2Tx.unlockers.foldLeft[Try[Long]](Success(0L))((partialRes, unlocker) =>
-          partialRes.flatMap(partialSum =>
-            /* Checks if unlocker is valid and if so adds to current running total */
             closedBox(unlocker.closedBoxId) match {
               case Some(box: PolyBox) =>
-                if (unlocker.boxKey.isValid(box.proposition, TokenExchangeTransaction.messageToSign(tex.buyOrder))) {
+                if (unlocker.boxKey.isValid(box.proposition, pr.messageToSign)) {
                   Success(partialSum + box.value)
                 } else {
                   Failure(new Exception("Incorrect unlocker"))
@@ -709,11 +722,19 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
           )
         )
       }
-      val enoughPolyTry = determineEnoughPolys(polyBoxesSumTry, tex)
-      val tries = Seq(enoughAssetTry, enoughPolyTry)
-      Try(tries.foreach(_.get))
+      
+      polySumTry flatMap { openSum =>
+        if(pr.newBoxes.map {
+          case p: PolyBox => p.value
+          case _ => 0L
+        }.sum == openSum - pr.fee) {
+          Success[Unit](Unit)
+        } else {
+          Failure(new Exception("Negative fee"))
+        }
+      }
     }
-    statefulValid.flatMap(_ => semanticValidity(tex))
+    statefulValid.flatMap(_ => semanticValidity(pr))
   }
 }
 
@@ -727,6 +748,7 @@ object BifrostState {
   type GSC = GenericStateChanges[T, P, BX]
   type BSC = BifrostStateChanges
 
+  //noinspection ScalaStyle
   def semanticValidity(tx: TX): Try[Unit] = {
     tx match {
       case poT: PolyTransfer => PolyTransfer.validate(poT)
@@ -738,7 +760,6 @@ object BifrostState {
       case cme: ContractMethodExecution => ContractMethodExecution.validate(cme)
       case ar: AssetRedemption => AssetRedemption.validate(ar)
       case ct: ConversionTransaction => ConversionTransaction.validate(ct)
-      case tex: TokenExchangeTransaction => TokenExchangeTransaction.validate(tex)
       case _ => throw new Exception("Semantic validity not implemented for " + tx.getClass.toGenericString)
     }
   }
@@ -763,7 +784,7 @@ object BifrostState {
 
       var finalToAdd = toAdd
       if (reward != 0) finalToAdd += PolyBox(gen, rewardNonce, reward)
-
+      
       //no reward additional to tx fees
       BifrostStateChanges(toRemove, finalToAdd, mod.timestamp)
     }

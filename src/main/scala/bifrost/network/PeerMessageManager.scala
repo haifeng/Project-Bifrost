@@ -8,14 +8,14 @@ import io.iohk.iodb.ByteArrayWrapper
 import scorex.core.crypto.hash.FastCryptographicHash
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.encode.Base58
-import serializer.PeerMessage
+import serializer.ProducerProposal
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 import scala.util.{Success, Try}
 
 
-case class PeerMessageManager(var messages: TrieMap[ByteArrayWrapper, PeerMessage]) extends ScorexLogging {
+case class PeerMessageManager(var messages: TrieMap[ByteArrayWrapper, ProducerProposal]) extends ScorexLogging {
 
   setHeartbeatCheck()
 
@@ -38,14 +38,14 @@ case class PeerMessageManager(var messages: TrieMap[ByteArrayWrapper, PeerMessag
     scheduler.scheduleOnce(Duration(timeoutPeriod, TimeUnit.MILLISECONDS),task)
   }
 
-  private def key(p: PeerMessage): ByteArrayWrapper = ByteArrayWrapper(p.messageBytes.toByteArray)
+  private def key(p: ProducerProposal): ByteArrayWrapper = ByteArrayWrapper(p.producer.toByteArray ++ FastCryptographicHash(p.details.toByteArray))
 
   //getters
-  def getById(id: ByteArrayWrapper): Option[PeerMessage] = messages.get(id)
+  def getById(id: ByteArrayWrapper): Option[ProducerProposal] = messages.get(id)
 
   def contains(id: ByteArrayWrapper): Boolean = messages.contains(id)
 
-  def getAll(ids: Seq[ByteArrayWrapper]): Seq[PeerMessage] = ids.flatMap(getById)
+  def getAll(ids: Seq[ByteArrayWrapper]): Seq[ProducerProposal] = ids.flatMap(getById)
 
   private def cleanup(): Unit = {
     messages = messages.filter {
@@ -55,27 +55,27 @@ case class PeerMessageManager(var messages: TrieMap[ByteArrayWrapper, PeerMessag
   }
 
   //modifiers
-  def put(p: PeerMessage): Try[PeerMessageManager] = Try {
+  def put(p: ProducerProposal): Try[PeerMessageManager] = Try {
     messages.put(key(p), p)
     this
   }
 
-  def put(proposals: Iterable[PeerMessage]): Try[PeerMessageManager] = Success(putWithoutCheck(proposals))
+  def put(proposals: Iterable[ProducerProposal]): Try[PeerMessageManager] = Success(putWithoutCheck(proposals))
 
-  def putWithoutCheck(proposals: Iterable[PeerMessage]): PeerMessageManager = {
+  def putWithoutCheck(proposals: Iterable[ProducerProposal]): PeerMessageManager = {
     proposals.foreach(p => messages.put(key(p), p))
     this
   }
 
-  def remove(p: PeerMessage): PeerMessageManager = {
+  def remove(p: ProducerProposal): PeerMessageManager = {
     messages.remove(key(p))
     this
   }
 
-  def take(limit: Int): Iterable[PeerMessage] =
+  def take(limit: Int): Iterable[ProducerProposal] =
     messages.toSeq.sortBy(m => Base58.encode(m._1.data)).map(_._2).take(limit)
 
-  def filter(condition: (PeerMessage) => Boolean): PeerMessageManager = {
+  def filter(condition: (ProducerProposal) => Boolean): PeerMessageManager = {
     messages.retain { (k, v) => condition(v) }
     this
   }

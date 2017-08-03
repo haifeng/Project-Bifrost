@@ -24,7 +24,6 @@ dependencyOverrides in ThisBuild ++= Set(
   "com.lihaoyi" % "sourcecode_2.12" % "0.1.3",
   "com.thoughtworks.paranamer" % "paranamer" % "2.8",
   "com.trueaccord.lenses" % "lenses_2.12" % "0.4.12",
-  "com.trueaccord.scalapb" % "scalapb-json4s_2.12" % "0.3.2",
   "com.trueaccord.scalapb" % "scalapb-runtime_2.12" % "0.6.0",
   "com.typesafe" % "config" % "1.3.0",
   "com.typesafe" % "ssl-config-core_2.12" % "0.2.1",
@@ -68,16 +67,10 @@ dependencyOverrides in ThisBuild ++= Set(
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
   "org.consensusresearch" % "scrypto_2.12" % "1.2.0-RC3",
   "org.javassist" % "javassist" % "3.18.2-GA",
-  "org.json4s" % "json4s-ast_2.12" % "3.5.2",
-  "org.json4s" % "json4s-core_2.12" % "3.5.2",
-  "org.json4s" % "json4s-jackson_2.12" % "3.5.1",
-  "org.json4s" % "json4s-native_2.12" % "3.5.2",
-  "org.json4s" % "json4s-scalap_2.12" % "3.5.2",
   "org.reactivestreams" % "reactive-streams" % "1.0.0",
   "org.reflections" % "reflections" % "0.9.10",
   "org.scala-lang.modules" % "scala-java8-compat_2.12" % "0.8.0",
   "org.scala-lang.modules" % "scala-parser-combinators_2.12" % "1.0.4",
-  "org.scala-lang.modules" % "scala-xml_2.12" % "1.0.6",
   "org.scalanlp" % "breeze-macros_2.12" % "0.13.1",
   "org.scalanlp" % "breeze_2.12" % "0.13.1",
   "org.scalaz" % "scalaz-core_2.12" % "7.2.8",
@@ -94,4 +87,4 @@ dependencyOverrides in ThisBuild ++= Set(
   "org.whispersystems" % "curve25519-java" % "0.3.0",
   "org.yaml" % "snakeyaml" % "1.17"
 )
-// LIBRARY_DEPENDENCIES_HASH 594b4ce641e05739ee3c8dae4d660b669b4349db
+// LIBRARY_DEPENDENCIES_HASH e2e5a08bd474431fcdae3cfcaa3f2516916cbe6a

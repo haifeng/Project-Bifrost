@@ -166,14 +166,6 @@ class SerializationTests extends PropSpec
     }
   }
 
-  property("TokenExchangeTransaction Serialization") {
-    forAll(validTokenExchangeTxGen) {
-      tex: TokenExchangeTransaction =>
-        val parsed = BifrostTransactionCompanion.parseBytes(BifrostTransactionCompanion.toBytes(tex)).get
-        BifrostTransactionCompanion.toBytes(parsed) sameElements BifrostTransactionCompanion.toBytes(tex) shouldBe true
-    }
-  }
-
   property("ProfileTransaction Serialization") {
     forAll(profileTxGen) {
       p: ProfileTransaction =>
@@ -225,5 +217,10 @@ class SerializationTests extends PropSpec
         val parsed = BitSet() ++ BloomTopics.parseFrom(BloomTopics(intSeq).toByteArray).topics
         BloomTopics(parsed.toSeq).toByteArray sameElements BloomTopics((BitSet() ++ intSeq).toSeq).toByteArray shouldBe true
     }
+  }
+  
+  property("PolyRedemption Serialization") {
+    
+    //TODO finish PolyRedemption Serialization
   }
 }

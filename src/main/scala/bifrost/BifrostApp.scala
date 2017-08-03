@@ -9,7 +9,7 @@ import bifrost.api.http._
 import bifrost.blocks.BifrostBlock
 import bifrost.forging.{Forger, ForgingSettings}
 import bifrost.history.{BifrostSyncInfo, BifrostSyncInfoMessageSpec}
-import bifrost.network.{BifrostNodeViewSynchronizer, PeerMessageSpec}
+import bifrost.network.{BifrostNodeViewSynchronizer, ProducerNotifySpec}
 import bifrost.scorexMod.{GenericApplication, GenericNodeViewSynchronizer}
 import bifrost.scorexMod.api.http.GenericNodeViewApiRoute
 import bifrost.transaction.BifrostTransaction
@@ -44,14 +44,14 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
   }
   log.debug(s"Starting application with settings \n$settings")
 
-  override protected lazy val additionalMessageSpecs: Seq[MessageSpec[_]] = Seq(BifrostSyncInfoMessageSpec, PeerMessageSpec)
+  override protected lazy val additionalMessageSpecs: Seq[MessageSpec[_]] = Seq(BifrostSyncInfoMessageSpec, ProducerNotifySpec)
 
   override val nodeViewHolderRef: ActorRef = actorSystem.actorOf(Props(new NVHT(settings)))
 
   override val apiRoutes: Seq[ApiRoute] = Seq(
     DebugApiRoute(settings, nodeViewHolderRef),
     WalletApiRoute(settings, nodeViewHolderRef),
-    ContractApiRoute(settings, nodeViewHolderRef, networkController),
+    ContractApiRoute(settings, nodeViewHolderRef),
     AssetApiRoute(settings, nodeViewHolderRef),
     UtilsApiRoute(settings),
     GenericNodeViewApiRoute[P, TX](settings, nodeViewHolderRef),
@@ -102,6 +102,6 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
 }
 
 object BifrostApp extends App {
-  val settingsFilename = args.headOption.getOrElse("testnet-bifrost.json")
+  val settingsFilename = args.headOption.getOrElse("settings.json")
   new BifrostApp(settingsFilename).run()
 }

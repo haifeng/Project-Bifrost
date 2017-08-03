@@ -1,6 +1,6 @@
 package bifrost
 
-import bifrost.BifrostNodeViewHolder.{GetMessageManager, MessageManager, PeerMessageReceived}
+import bifrost.BifrostNodeViewHolder.ProducerInvestmentProposal
 import bifrost.blocks.{BifrostBlock, BifrostBlockCompanion}
 import bifrost.forging.ForgingSettings
 import bifrost.history.{BifrostHistory, BifrostSyncInfo}
@@ -19,11 +19,11 @@ import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.core.utils.ScorexLogging
 import scorex.core.{NodeViewHolder, NodeViewModifier}
 import scorex.crypto.encode.Base58
-import serializer.{PeerMessage, ProducerProposal}
+import serializer.ProducerProposal
 
 import scala.util.{Failure, Success}
 
-class BifrostNodeViewHolder(settings: ForgingSettings, private var messageManager: PeerMessageManager = PeerMessageManager.emptyManager)
+class BifrostNodeViewHolder(settings: ForgingSettings, private var peerManager: PeerMessageManager = PeerMessageManager.emptyManager)
   extends GenericNodeViewHolder[Any, ProofOfKnowledgeProposition[PrivateKey25519], BifrostTransaction, BifrostBox, BifrostBlock] {
 
   override val networkChunkSize: Int = settings.networkChunkSize
@@ -67,21 +67,14 @@ class BifrostNodeViewHolder(settings: ForgingSettings, private var messageManage
   }
 
   private def handleProposal: Receive = {
-    case PeerMessageReceived(p) =>
-      messageManager.put(p) match {
-        case Success(updatedManager) =>
-          messageManager = updatedManager
-          log.debug(s"Proposal $p Added")
+    case ProducerInvestmentProposal(p) =>
+      peerManager.put(p) match {
+        case Success(proposal) => peerManager = proposal
         case f: Failure[PeerMessageManager] => throw f.failed.get
       }
   }
 
-  private def getMessageManager: Receive = {
-    case GetMessageManager =>
-      sender() ! MessageManager(messageManager)
-  }
-
-  override def receive: Receive = handleProposal orElse getMessageManager orElse super.receive
+  override def receive: Receive = handleProposal orElse super.receive
 }
 
 object BifrostNodeViewHolder extends ScorexLogging {
@@ -93,11 +86,7 @@ object BifrostNodeViewHolder extends ScorexLogging {
 
   type NodeView = (HIS, MS, VL, MP)
 
-  case class PeerMessageReceived(p: PeerMessage)
-
-  case object GetMessageManager
-
-  case class MessageManager(m: PeerMessageManager)
+  case class ProducerInvestmentProposal(p: ProducerProposal)
 
   //noinspection ScalaStyle
   def initializeGenesis(settings: ForgingSettings): NodeView = {
