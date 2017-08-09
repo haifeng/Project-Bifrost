@@ -1250,8 +1250,6 @@ case class PolyRedemption(polysToRedeem: IndexedSeq[(PublicKey25519Proposition, 
                           timestamp: Long)
   extends BifrostTransaction {
   
-  import PolyRedemption._
-  
   override type M = PolyRedemption
   
   override lazy val boxIdsToOpen: IndexedSeq[Array[Byte]] = polysToRedeem.map { case (prop, nonce) =>
@@ -1291,8 +1289,4 @@ case class PolyRedemption(polysToRedeem: IndexedSeq[(PublicKey25519Proposition, 
   ).asJson
   
   override lazy val serializer = PolyRedemptionCompanion
-}
-
-object PolyRedemption {
-
 }

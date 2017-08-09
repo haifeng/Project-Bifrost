@@ -28,7 +28,7 @@ object BifrostTransactionCompanion extends Serializer[BifrostTransaction] {
     case r: ProfileTransaction => ProfileTransactionCompanion.toBytes(r)
     case ar: AssetRedemption => AssetRedemptionCompanion.toBytes(ar)
     case ct: ConversionTransaction => ConversionTransactionCompanion.toBytes(ct)
-    case pr: PolyRedemption => PolyRedemptionCompanion.toBytes(pr)
+    //case pr: PolyRedemption => PolyRedemptionCompanion.toBytes(pr)
   }
 
   override def parseBytes(bytes: Array[Byte]): Try[BifrostTransaction] = Try {
@@ -41,7 +41,7 @@ object BifrostTransactionCompanion extends Serializer[BifrostTransaction] {
       case "ProfileTransaction" => ProfileTransactionCompanion.parseBytes(bytes).get
       case "AssetRedemption" => AssetRedemptionCompanion.parseBytes(bytes).get
       case "ConversionTransaction" => ConversionTransactionCompanion.parseBytes(bytes).get
-     case "PolyRedemption" => PolyRedemptionCompanion.parseBytes(bytes).get
+     //case "PolyRedemption" => PolyRedemptionCompanion.parseBytes(bytes).get
     }
   }
 
@@ -985,7 +985,15 @@ object PolyRedemptionCompanion extends Serializer[PolyRedemption] {
     val typeBytes = "PolyRedemption".getBytes
     val prefixBytes = Ints.toByteArray(typeBytes.length) ++ typeBytes
     
-    prefixBytes ++ PolyRedemptionData(pr.polysToRedeem, pr.signatures, pr.fee, pr.timestamp).toByteArray
+    val prPropNonce = pr.polysToRedeem.map { case (polyProp, polyNonce) =>
+        transaction.propNonce.apply(prop = com.google.protobuf.ByteString.copyFrom(polyProp.pubKeyBytes), nonce = polyNonce)
+    }.toIndexedSeq
+    
+    val sigs = pr.signatures.map { b =>
+      com.google.protobuf.ByteString.copyFrom(b.signature)
+    }.toIndexedSeq
+    
+    prefixBytes ++ PolyRedemptionData(prPropNonce, sigs, pr.fee, pr.timestamp).toByteArray
   }
   override def parseBytes(bytes: Array[Byte]): Try[PolyRedemption] = Try {
     val typeLength = Ints.fromByteArray(bytes.take(Ints.BYTES))
@@ -993,6 +1001,16 @@ object PolyRedemptionCompanion extends Serializer[PolyRedemption] {
     var numBytesRead = Ints.BYTES + typeLength
   
     val prData = PolyRedemptionData.parseFrom(bytes.slice(numBytesRead, bytes.length))
-    PolyRedemption(prData.polysToRedeem, prData.signatures.toIndexedSeq, prData.fee, prData.timestamp)
+    
+    val polysToRedeemData: IndexedSeq[(PublicKey25519Proposition, Nonce)] = prData.polyPropNonce.map { pn =>
+      (PublicKey25519Proposition(pn.prop.toByteArray),
+        pn.nonce)
+    }
+    
+    val prSigs: IndexedSeq[Signature25519] = prData.signatures.map { s =>
+      Signature25519(s.toByteArray)
+    }
+    
+    PolyRedemption(polysToRedeemData, prSigs, prData.fee, prData.timestamp)
   }
 }

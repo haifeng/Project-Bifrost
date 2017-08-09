@@ -112,19 +112,17 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     
     /* if an asset box is signed with the basket key, add/remove it to/from the basket held in storage */
     val basketKey: PublicKey25519Proposition = PublicKey25519Proposition(storage.get(ByteArrayWrapper("basketKey".getBytes)).get.data)
-    val basketIds: Set[Array[Byte]] = Set(storage.get(ByteArrayWrapper("basket".getBytes)).get.data)
-    val basketBoxes: Set[BifrostBox] = basketIds.map{ b =>
-      BifrostBoxSerializer.parseBytes(storage.get(ByteArrayWrapper(b)).get.data).get
-    }
+    val basketIdData: Array[Byte] = storage.get(ByteArrayWrapper("basket".getBytes)).get.data
     
-    val basketChange = changes.toAppend.map { b =>
-      if(b.publicKey == basketKey)
-        ByteArrayWrapper(b.id)
-    } -
-    boxIdsToRemove.map { b =>
-      if(basketIds.contains(b.data))
-        b
+    /* split basketIds into separate ids */
+    val basketIds: Set[Array[Byte]] = basketIdData.sliding(Longs.BYTES).toSet
+    val basketToAdd: Set[Array[Byte]] = changes.toAppend.filter(b => b.publicKey == basketKey).map { b =>
+      b.id
     }
+    val basketToRemove: Set[Array[Byte]] = boxIdsToRemove.filter(b => basketIds.contains(b.data)).map { b =>
+      b.data
+    }
+    val newBasket: Array[Byte] = (basketIds.filterNot(basketToRemove) ++ basketToAdd).flatten.toArray
     
     val timestamp: Long = changes.asInstanceOf[BifrostStateChanges].timestamp
 
@@ -136,7 +134,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
       boxesToAdd + (ByteArrayWrapper(FastCryptographicHash("timestamp".getBytes)) -> ByteArrayWrapper(Longs.toByteArray(timestamp))) +
         (ByteArrayWrapper("masterKey".getBytes) -> ByteArrayWrapper("6sYyiTguyQ455w2dGEaNbrwkAWAEYV1Zk6FtZMknWDKQ".getBytes)) +
         (ByteArrayWrapper("basketKey".getBytes) -> ByteArrayWrapper("7BDhJv6Wh2MekgJLvQ98ot9xiw5x3N4b3KipURdrW8Ge".getBytes)) +
-        //(ByteArrayWrapper("basket".getBytes) -> ByteArrayWrapper()) +
+        (ByteArrayWrapper("basket".getBytes) -> ByteArrayWrapper(newBasket)) +
         (ByteArrayWrapper("'polyTotal".getBytes) -> ByteArrayWrapper(Longs.toByteArray(totalPolys)))
     )
 
@@ -703,7 +701,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
     statefulValid.flatMap(_ => semanticValidity(ct))
   }
   
-  def validPolyRedemption(pr: PolyRedemption): Try[Unit] = {
+  /*def validPolyRedemption(pr: PolyRedemption): Try[Unit] = {
     val statefulValid: Try[Unit] = {
       
       /* Check if all the proposed boxes exist */
@@ -735,7 +733,7 @@ case class BifrostState(storage: LSMStore, override val version: VersionTag, tim
       }
     }
     statefulValid.flatMap(_ => semanticValidity(pr))
-  }
+  }*/
 }
 
 object BifrostState {
