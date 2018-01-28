@@ -3,7 +3,7 @@ package bifrost.consensus.F_VRF
 import scorex.core.serialization.Serializer
 
 /**
-  * NIZK proof that log_g(y) = log_a(b)
+  * Proposition that log_g(y) = log_a(b)
   *
   * @param g  generator of a group of prime order m
   * @param y  public key generated originally from g&#94;k, k in Z_m
