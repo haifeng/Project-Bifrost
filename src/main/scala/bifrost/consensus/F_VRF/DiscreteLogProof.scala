@@ -1,5 +1,11 @@
 package bifrost.consensus.F_VRF
 
+import java.security.SecureRandom
+import javax.crypto.interfaces.DHPrivateKey
+
+import org.bouncycastle.crypto.KeyGenerationParameters
+import org.bouncycastle.crypto.generators.DHBasicKeyPairGenerator
+import org.bouncycastle.crypto.params.{DHKeyGenerationParameters, DHKeyParameters, DHParameters, DHPrivateKeyParameters}
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.proof.Proof
@@ -32,7 +38,9 @@ object DiscreteLogProof {
     */
   def apply(m: BigInt, g: BigInt, hm: BigInt, k: BigInt, q: BigInt): DiscreteLogProof = {
     val (c: BigInt, s: BigInt) = {
-      val r: BigInt = ??? // randomly selected from Z_q
+      val keyGen: DHBasicKeyPairGenerator = new DHBasicKeyPairGenerator()
+      keyGen.init(new DHKeyGenerationParameters(SecureRandom, new DHParameters(q.bigInteger, g.bigInteger)))
+      val r: BigInt = BigInt(keyGen.generateKeyPair().getPrivate.asInstanceOf[DHPrivateKeyParameters].getX) // randomly selected from Z_q
       val c: BigInt = BigInt(hash(m, g^k, g^r, hm^r))
       val s: BigInt = r + c * k % g // needs to  be mod q, not g
       (c, s)

@@ -5,8 +5,8 @@ import scorex.core.transaction.proof.Proof
 
 /**
   *
-  * @tparam O
-  * @tparam P
+  * @tparam O   the output type
+  * @tparam P   the proposition which, when proved, verifies proper generation
   */
 trait VerifiablyRandomFunction[O <: AnyVal, P <: Proposition] {
 
