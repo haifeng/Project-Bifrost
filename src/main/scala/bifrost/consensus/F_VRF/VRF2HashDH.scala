@@ -1,14 +1,19 @@
 package bifrost.consensus.F_VRF
 
 import scorex.core.transaction.proof.Proof
-import scorex.core.transaction.state.PrivateKey25519
 
 /**
   *
+  * @param k  private key selected from Z_q
+  * @param g  generator for group of prime order q
+  * @param q  prime order
   */
-class VRF2HashDH(k: PrivateKey25519) extends VerifiablyRandomFunction[Array[Byte], DiscreteLogProposition] {
+class VRF2HashDH(k: BigInt, g: BigInt, q: BigInt) extends VerifiablyRandomFunction[Array[Byte], DiscreteLogProposition] {
 
-  override def sample: (Array[Byte], Proof[DiscreteLogProposition]) = ???
+  override def apply(params: BigInt*): (Array[Byte], DiscreteLogProof) = {
+    val m = params(0)
+    (DiscreteLogProof.hash(m, DiscreteLogProof.groupHash(m)^k), DiscreteLogProof(m, g, DiscreteLogProof.groupHash(m), k, q))
+  }
 
   override def verify(proposition: DiscreteLogProposition,
                       proof: Proof[DiscreteLogProposition],

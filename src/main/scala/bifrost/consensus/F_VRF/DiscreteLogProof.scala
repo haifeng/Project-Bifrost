@@ -3,8 +3,6 @@ package bifrost.consensus.F_VRF
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.proof.Proof
-import scorex.core.transaction.state.PrivateKey25519
-import scorex.crypto.hash.Blake2b256
 
 /**
   * NIZK proof that log_g(y) = log_a(b), covered by random t
@@ -28,17 +26,15 @@ object DiscreteLogProof {
 
   /**
     * @param m  argument used as parameter for PRF
-    * @param g  generator of a group of prime order m
-    * @param v  public key generated originally from g&#94;k, k in Z_m
-    * @param a  H(m)&#94;r, where H: Z => {0,1}&#94;lambda
-    * @param b  a&#94;k
-    * @param k
+    * @param g  generator of a group of prime order q
+    * @param k  private key randomly selected from Z_q
+    * @param q  prime order
     */
-  def apply(m: BigInt, g: BigInt, v: BigInt, a: BigInt, b: BigInt, k: PrivateKey25519): DiscreteLogProof = {
+  def apply(m: BigInt, g: BigInt, hm: BigInt, k: BigInt, q: BigInt): DiscreteLogProof = {
     val (c: BigInt, s: BigInt) = {
-      val r: BigInt = ??? // randomly selected from Z_m
-      val c: BigInt = BigInt(hash(m, v, g^r, a))
-      val s: BigInt = r + c * BigInt(k.privKeyBytes) % g // needs to  be mod q, not g
+      val r: BigInt = ??? // randomly selected from Z_q
+      val c: BigInt = BigInt(hash(m, g^k, g^r, hm^r))
+      val s: BigInt = r + c * k % g // needs to  be mod q, not g
       (c, s)
     }
 

@@ -10,7 +10,7 @@ import scorex.core.transaction.proof.Proof
   */
 trait VerifiablyRandomFunction[O <: AnyVal, P <: Proposition] {
 
-  def sample: (O, Proof[P])
+  def apply(params: BigInt*): (O, P)
   def verify(proposition: P, proof: Proof[P], sample: O): Boolean
 
 }
