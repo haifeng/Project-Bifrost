@@ -36,10 +36,10 @@ object DiscreteLogProof {
     * @param k  private key randomly selected from Z_q
     * @param q  prime order
     */
-  def apply(m: BigInt, g: BigInt, hm: BigInt, k: BigInt, q: BigInt): DiscreteLogProof = {
+  def apply(m: BigInt, g: BigInt, hm: BigInt, k: BigInt, q: BigInt, p: BigInt): DiscreteLogProof = {
     val (c: BigInt, s: BigInt) = {
       val keyGen: DHBasicKeyPairGenerator = new DHBasicKeyPairGenerator()
-      keyGen.init(new DHKeyGenerationParameters(SecureRandom, new DHParameters(q.bigInteger, g.bigInteger)))
+      keyGen.init(new DHKeyGenerationParameters(SecureRandom, new DHParameters(p.bigInteger, g.bigInteger, q.bigInteger)))
       val r: BigInt = BigInt(keyGen.generateKeyPair().getPrivate.asInstanceOf[DHPrivateKeyParameters].getX) // randomly selected from Z_q
       val c: BigInt = BigInt(hash(m, g^k, g^r, hm^r))
       val s: BigInt = r + c * k % g // needs to  be mod q, not g
