@@ -46,7 +46,7 @@ object DiscreteLogProof {
   }
 
   // TODO these are just placeholder hashes!
-  def hash(inputs: BigInt*): Blake2b256.Digest = scorex.crypto.hash.Blake2b256(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray))
+  def hash(inputs: BigInt*): Array[Byte] = scorex.crypto.hash.Blake2b256(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray))
   def groupHash(inputs: BigInt*): BigInt = BigInt(scorex.crypto.hash.Blake2b256(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray)))
 
 }
