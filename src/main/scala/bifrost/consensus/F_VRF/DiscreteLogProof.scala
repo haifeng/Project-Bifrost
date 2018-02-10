@@ -58,21 +58,21 @@ object DiscreteLogProof {
     * Refer to
     *   - https://crypto.stackexchange.com/questions/37305/how-can-i-instantiate-a-generalized-hash-function
     *
-    * @param l        the security parameter for the size of the bit-space
+    * @param l        the length of the output in bits
     * @param inputs   inputs to be concatenated and hashed
     * @return
     */
   def hash(l: Int, inputs: BigInt*): Array[Byte] = {
     val H: Array[Byte] = hashFunction(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray))
     val hashGen = new KDF2BytesGenerator(new Blake2bDigest(H))
-    val hashOutput: Array[Byte] = Array.fill[Byte](l)(0)
+    val hashOutput: Array[Byte] = Array.fill[Byte](Math.ceil(l/8).toInt)(0)
     hashGen.init(new ISO18033KDFParameters(Array[Byte]()))
     hashGen.generateBytes(hashOutput, 0, hashOutput.length)
     hashOutput
   }
 
   /**
-    * We take a strong hash function here, mod by q-2, putting in the range [0, q-2], add 2 to put it into [2, q]
+    * We take a strong hash function here over [0, ~q], mod by q-2, putting in the range [0, q-2], add 2 to put it into [2, q]
     * By squaring this mod (2q + 1), we achieve a hash uniformly distributed over the quadratic residues of Z_{2q + 1},
     * a subgroup which is of order q
     *
@@ -86,7 +86,7 @@ object DiscreteLogProof {
     * @return         A uniformly selected element of the group with order q
     */
   def groupHash(q: BigInt, inputs: BigInt*): BigInt = {
-    val H = BigInt(hashFunction(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray)))
+    val H = (BigInt(hash(q.bitLength, inputs:_*)) % (q - 2)) + 2
     (H % (2*q + 1))^2
   }
 }
