@@ -2,8 +2,9 @@ package bifrost.consensus.F_VRF
 
 import java.security.SecureRandom
 
-import org.bouncycastle.crypto.generators.DHBasicKeyPairGenerator
-import org.bouncycastle.crypto.params.{DHKeyGenerationParameters, DHParameters, DHPrivateKeyParameters}
+import org.bouncycastle.crypto.digests.Blake2bDigest
+import org.bouncycastle.crypto.generators.{DHBasicKeyPairGenerator, KDF2BytesGenerator}
+import org.bouncycastle.crypto.params._
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.proof.Proof
@@ -55,16 +56,19 @@ object DiscreteLogProof {
     * Hash function that maps to [0, 2&#94;l], translated to {0, 1}&#94;l
     *
     * Refer to
-    *   - https://crypto.stackexchange.com/questions/17990/sha256-output-to-0-99-number-range/17994#17994
+    *   - https://crypto.stackexchange.com/questions/37305/how-can-i-instantiate-a-generalized-hash-function
     *
-    * @param l        the security parameter for the size of the bit-space, no bigger than 512
-    *                 (though this doesn't matter, as larger l will simply have no effect on the output)
+    * @param l        the security parameter for the size of the bit-space
     * @param inputs   inputs to be concatenated and hashed
     * @return
     */
   def hash(l: Int, inputs: BigInt*): Array[Byte] = {
-    val H = BigInt(hashFunction(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray)))
-    (H % (2^l)).toByteArray
+    val H: Array[Byte] = hashFunction(inputs.foldLeft(new Array[Byte](0))((a: Array[Byte], b) => a ++ b.toByteArray))
+    val hashGen = new KDF2BytesGenerator(new Blake2bDigest(H))
+    val hashOutput: Array[Byte] = Array.fill[Byte](l)(0)
+    hashGen.init(new ISO18033KDFParameters(Array[Byte]()))
+    hashGen.generateBytes(hashOutput, 0, hashOutput.length)
+    hashOutput
   }
 
   /**
@@ -75,7 +79,7 @@ object DiscreteLogProof {
     * Refer to
     *   - https://crypto.stackexchange.com/questions/39877/what-is-a-cyclic-group-of-prime-order-q-such-that-the-dlp-is-hard
     *   - https://crypto.stackexchange.com/questions/39903/how-to-construct-a-hash-function-into-a-cyclic-group-such-that-its-discrete-log/39918#39918
-    *   - https://crypto.stackexchange.com/questions/17990/sha256-output-to-0-99-number-range/17994#17994
+    *   - https://crypto.stackexchange.com/questions/37305/how-can-i-instantiate-a-generalized-hash-function
     *
     * @param q        the (Sophie Germain) prime order (i.e. 2q + 1 is a safe prime)
     * @param inputs   inputs to be concatenated
