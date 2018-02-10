@@ -6,7 +6,7 @@ import scorex.core.transaction.proof.Proof
   *
   * @param k  private key selected from Z_q
   * @param g  generator for group of prime order q
-  * @param q  prime order
+  * @param q  prime order (a Sophie Germain prime)
   * @param p  prime modulus
   */
 class VRF2HashDH(k: BigInt, g: BigInt, q: BigInt, p: BigInt) extends VerifiablyRandomFunction[Array[Byte], DiscreteLogProposition] {
