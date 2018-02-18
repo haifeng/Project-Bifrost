@@ -1,0 +1,3 @@
+package bifrost.consensus.F_KES
+
+trait ForwardSecureSignatureScheme extends SignatureScheme with ForwardSecure
